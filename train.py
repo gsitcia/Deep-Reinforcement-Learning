@@ -30,7 +30,7 @@ def select_action(state, global_step):
     eps_end = hparams.eps_end
     eps_decay = hparams.eps_decay
 
-    eps = eps_end + (hparams.eps_start - hparams.ep)
+    eps = eps_end + (eps_start - hparams.ep)
 
 
 # Networks
