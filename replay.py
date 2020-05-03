@@ -5,8 +5,7 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 
 
-class ReplayMemory(object):
-
+class ReplayMemory:
     def __init__(self, capacity):
         self.capacity = capacity
         self.memory = []
