@@ -25,7 +25,7 @@ hparams = argparse.Namespace(batch_size=32,
                              target_update=5000,
                              lr=2.5e-4,
                              momentum=0.95,
-                             train_start=10000,
+                             train_start=50,
                              memory_size=1000000,
                              render=True)
 
@@ -87,21 +87,19 @@ for episode in range(hparams.n_episodes):
             transitions = memory.sample(hparams.batch_size)
             batch = Transition(*zip(*transitions))
 
-            actions = batch.action
-            rewards = batch.reward
+            states = torch.cat(batch.state).to(device)
+            actions = torch.cat(batch.action).to(device)
+            rewards = torch.cat(batch.reward).to(device)
 
             non_terminal_mask = torch.tensor([state is not None for state in batch.next_state],
-                                             device=device, dtype=torch.bool)
-            non_terminal_next_states = torch.cat([state for state in batch.next_state if state is not None])
-            state = torch.cat(batch.state)
-            action = torch.cat(batch.action)
-            reward = torch.cat(batch.reward)
+                                             device=device, dtype=torch.bool).unsqueeze(1)
+            non_terminal_next_states = torch.cat([state for state in batch.next_state if state is not None]).to(device)
 
-            action_values = q_network(state).gather(1, action)
+            action_values = q_network(states).gather(1, actions)
 
             next_state_action_values = torch.zeros_like(action_values)
             next_state_action_values[non_terminal_mask] = target_network(non_terminal_next_states).max(1)[0].detach()
-            target_action_values = (next_state_action_values * hparams.gamma) + reward
+            target_action_values = (next_state_action_values * hparams.gamma) + rewards
 
             loss = F.smooth_l1_loss(action_values, target_action_values)
 
