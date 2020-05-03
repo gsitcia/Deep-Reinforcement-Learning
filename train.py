@@ -25,7 +25,7 @@ hparams = argparse.Namespace(batch_size=32,
                              target_update=5000,
                              lr=2.5e-4,
                              momentum=0.95,
-                             train_start=50,
+                             train_start=10000,
                              memory_size=1000000,
                              render=True)
 
