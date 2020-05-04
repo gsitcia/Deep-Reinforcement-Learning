@@ -10,14 +10,19 @@ import torch.nn.functional as F
 
 import gym
 
+# from comet_ml import Experiment
+
 import wrappers
 from networks import DQN
 from replay import ReplayMemory, Transition
 
+# experiment = Experiment(project_name="dqn")
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# Hyperparameters
 hparams = argparse.Namespace(batch_size=32,
-                             n_episodes=1000,
+                             n_episodes=100000,
                              gamma=0.99,
                              eps_start=1,
                              eps_end=0.02,
@@ -29,7 +34,9 @@ hparams = argparse.Namespace(batch_size=32,
                              memory_size=1000000,
                              render=True)
 
+# make sure we can sample a batch
 assert hparams.train_start >= hparams.batch_size
+
 
 def select_action(q, state, global_step):
     eps_start = hparams.eps_start
@@ -62,7 +69,9 @@ env = gym.make("Breakout-v0")
 env = wrappers.make_env(env)
 
 global_step = 0
+train_started = False
 for episode in range(hparams.n_episodes):
+    # Initialize the State
     obs = env.reset()
     state = torch.tensor(obs).permute(2, 0, 1).unsqueeze(0)
     total_reward = 0.0
@@ -70,37 +79,59 @@ for episode in range(hparams.n_episodes):
         if hparams.render:
             env.render()
 
+        # Select Action
         action = select_action(q_network, state, global_step)
 
+        # Environment Step
         obs, reward, done, info = env.step(action)
 
+        # Next State (None if the episode is over)
         next_state = torch.tensor(obs).permute(2, 0, 1).unsqueeze(0) if not done else None
 
+        # Log Total Episode Reward
         total_reward += reward
         reward = torch.tensor([[reward]])
 
+        # Add (s, a, r, s') to the Replay Buffer
         memory.push(state, action.to('cpu'), next_state, reward)
 
+        # Update Current State
         state = next_state
 
         if len(memory) > hparams.train_start:
-            transitions = memory.sample(hparams.batch_size)
-            batch = Transition(*zip(*transitions))
+            # Note the start of training
+            if not train_started:
+                torch.save(torch.tensor(global_step), "train_start_step.txt")
+                torch.save(torch.tensor(episode), "train_start_episode.txt")
+                # TODO: Log this
+                train_started = True
 
+            # Sample a Batch
+            transitions = memory.sample(hparams.batch_size)
+            batch = Transition(*zip(*transitions))  # trick to transpose data
+
+            # Convert Batch to a Torch Tensor with Batch Dimension 0
             states = torch.cat(batch.state).to(device)
             actions = torch.cat(batch.action).to(device)
             rewards = torch.cat(batch.reward).to(device)
 
+            # Generate a Mask for Non-Terminal States
             non_terminal_mask = torch.tensor([state is not None for state in batch.next_state],
                                              device=device, dtype=torch.bool).unsqueeze(1)
+            # All Non-Terminal (s')
             non_terminal_next_states = torch.cat([state for state in batch.next_state if state is not None]).to(device)
 
+            # Compute q(s)
             action_values = q_network(states).gather(1, actions)
 
+            # Set q(s') to 0 and fill in for non-terminal (s')
             next_state_action_values = torch.zeros_like(action_values)
             next_state_action_values[non_terminal_mask] = target_network(non_terminal_next_states).max(1)[0].detach()
+
+            # Compute Targets
             target_action_values = (next_state_action_values * hparams.gamma) + rewards
 
+            # Huber Loss
             loss = F.smooth_l1_loss(action_values, target_action_values)
 
             optimizer.zero_grad()
@@ -117,4 +148,7 @@ for episode in range(hparams.n_episodes):
             break
     if (episode + 1) % 20 == 0:
         print('Total steps: {} \t Episode: {}/{} \t Total reward: {}'.format(global_step, episode, t, total_reward))
+    if (episode + 1) % 1000 == 0:
+        pass
+        # TODO: Save Model
 env.close()
