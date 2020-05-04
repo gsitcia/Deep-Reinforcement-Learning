@@ -13,7 +13,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 path = "checkpoints/ep_100.pt"
 
 # Network
-q_network = DQN()
+q_network = DQN().to(device)
 q_network.load_state_dict(torch.load(path))
 q_network.eval()
 
