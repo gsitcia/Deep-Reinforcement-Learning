@@ -22,11 +22,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Hyperparameters
 hparams = argparse.Namespace(batch_size=32,
-                             n_episodes=100000,
+                             n_episodes=1000000,
                              gamma=0.99,
                              eps_start=1,
-                             eps_end=0.02,
-                             eps_decay=1e-6,
+                             eps_end=0.1,
+                             eps_time=1000000,
                              target_update=5000,
                              lr=2.5e-4,
                              momentum=0.95,
@@ -38,13 +38,20 @@ hparams = argparse.Namespace(batch_size=32,
 assert hparams.train_start >= hparams.batch_size
 
 
+# Epsilon Greedy Policy
 def select_action(q, state, global_step):
     eps_start = hparams.eps_start
     eps_end = hparams.eps_end
-    eps_decay = hparams.eps_decay
+    eps_time = hparams.eps_time
+
+    # Linear Epsilon Decay
+    if global_step < eps_time:
+        epsilon = eps_start - (eps_start - eps_end) * global_step / eps_time
+    else:
+        epsilon = eps_end
 
     sample = random.random()
-    epsilon = eps_end + (eps_start - eps_end) * math.exp(-eps_decay * global_step)
+
     if sample > epsilon:
         with torch.no_grad():
             return q(state.to(device)).max(1)[1].view(1, 1)
@@ -61,7 +68,7 @@ target_network.eval()
 # Replay Memory
 memory = ReplayMemory(hparams.memory_size)
 
-# Optimizers
+# Optimizer
 optimizer = torch.optim.RMSprop(q_network.parameters(), lr=hparams.lr, momentum=hparams.momentum)
 
 # Environment
@@ -134,21 +141,30 @@ for episode in range(hparams.n_episodes):
             # Huber Loss
             loss = F.smooth_l1_loss(action_values, target_action_values)
 
+            # Compute Gradients
             optimizer.zero_grad()
             loss.backward()
+
+            # Clip Gradients
             for param in q_network.parameters():
                 param.grad.data.clamp_(-1, 1)
+
+            # Update Parameters
             optimizer.step()
 
+            # Update Target Network
             if (global_step + 1) % hparams.target_update == 0:
                 target_network.load_state_dict(q_network.state_dict())
 
         global_step += 1
         if done:
             break
+
+    # Log to Console
     if (episode + 1) % 20 == 0:
-        print('Total steps: {} \t Episode: {}/{} \t Total reward: {}'.format(global_step, episode, t, total_reward))
-    if (episode + 1) % 1000 == 0:
-        pass
-        # TODO: Save Model
+        print(f"Total steps: {global_step + 1} \t Episode: {episode + 1}/{t + 1} \t Total reward: {total_reward}")
+
+    # Save Model
+    if (episode + 1) % 100 == 0:
+        torch.save(q_network.state_dict(), f"checkpoints/ep_{episode + 1}.pt")
 env.close()
