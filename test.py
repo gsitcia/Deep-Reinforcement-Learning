@@ -1,3 +1,5 @@
+import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -33,6 +35,7 @@ while True:  # every episode
     state = torch.tensor(obs).permute(2, 0, 1).unsqueeze(0)
     while True:  # every timestep
         env.render()
+        time.sleep(0.065)
 
         # Select Action
         action = select_action(q_network, state)
