@@ -133,7 +133,7 @@ for episode in range(hparams.n_episodes):
 
             # Set q(s') to 0 and fill in for non-terminal (s')
             next_state_action_values = torch.zeros_like(action_values)
-            next_state_action_values[non_terminal_mask] = target_network(non_terminal_next_states).max(1)[0].detach()
+            next_state_action_values[non_terminal_mask] = target_network(non_terminal_next_states).max(1)[0].unsqueeze(1).detach()
 
             # Compute Targets
             target_action_values = (next_state_action_values * hparams.gamma) + rewards
