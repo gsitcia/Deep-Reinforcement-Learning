@@ -42,7 +42,6 @@ while True:  # every episode
 
         # Environment Step
         obs, reward, done, info = env.step(action)
-        state = torch.tensor(obs).permute(2, 0, 1).unsqueeze(0)
 
         if done:
             break
