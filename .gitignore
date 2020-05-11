@@ -1,1 +1,7 @@
 /train.swb
+.venv/
+Pipfile
+*.pt
+*.mp4
+*.png
+
