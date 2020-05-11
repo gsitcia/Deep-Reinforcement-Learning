@@ -7,15 +7,16 @@ import numpy as np
 import gym
 import copy
 import cv2
+import torch
 cv2.ocl.setUseOpenCL(False)
 
 
-def make_env(env, stack_frames=True, episodic_life=True, clip_rewards=False, scale=False):
+def make_env(env, stack_frames=True, episodic_life=True, clip_rewards=False, scale=False, noop_max=30):
     if episodic_life:
         env = EpisodicLifeEnv(env)
 
-    env = NoopResetEnv(env, noop_max=30)
-    env = MaxAndSkipEnv(env, skip=4)
+    env = NoopResetEnv(env, noop_max=noop_max)
+    env = MaxAndSkipEnv(env, skip=1)
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
 
@@ -88,17 +89,17 @@ class FrameStack(gym.Wrapper):
     def reset(self):
         ob = self.env.reset()
         for _ in range(self.k):
-            self.frames.append(ob)
+            self.frames.append(torch.tensor(ob).detach().permute(2,0,1))
         return self._get_ob()
 
     def step(self, action):
         ob, reward, done, info = self.env.step(action)
-        self.frames.append(ob)
+        self.frames.append(torch.tensor(ob).detach().permute(2,0,1))
         return self._get_ob(), reward, done, info
 
     def _get_ob(self):
         assert len(self.frames) == self.k
-        return LazyFrames(list(self.frames))
+        return list(self.frames)
 
 
 class WarpFrame(gym.ObservationWrapper):
@@ -131,7 +132,7 @@ class FireResetEnv(gym.Wrapper):
         obs, _, done, _ = self.env.step(1)
         if done:
             self.env.reset()
-        obs, _, done, _ = self.env.step(2)
+        obs, _, done, _ = self.env.step(1) # why????? was it 2????????
         if done:
             self.env.reset()
         return obs
